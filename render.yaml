@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: slowed-reverb-api
+    runtime: python
+    buildCommand: bash build.sh
+    startCommand: python app.py
+    plan: free
