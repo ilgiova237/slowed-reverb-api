@@ -5,12 +5,20 @@ import subprocess, shutil, os
 app = Flask(__name__)
 CORS(app, origins="*")
 
+def find_ytdlp():
+    # Try PATH first, then HOME
+    p = shutil.which('yt-dlp')
+    if p: return p
+    home = os.path.join(os.environ.get('HOME', ''), 'yt-dlp')
+    if os.path.exists(home): return home
+    return None
+
 @app.route('/audio')
 def get_audio():
     vid = request.args.get('v', '').strip()
     if not vid or len(vid) > 20:
         return jsonify({'error': 'Invalid video ID'}), 400
-    ytdlp = shutil.which('yt-dlp')
+    ytdlp = find_ytdlp()
     if not ytdlp:
         return jsonify({'error': 'yt-dlp not found'}), 500
     try:
