@@ -6,6 +6,8 @@ import os
 app = Flask(__name__)
 CORS(app, origins="*")
 
+COOKIES_PATH = '/etc/secrets/cookies.txt'
+
 @app.route('/audio')
 def get_audio():
     vid = request.args.get('v', '').strip()
@@ -16,7 +18,6 @@ def get_audio():
             'format': 'bestaudio/best',
             'quiet': True,
             'no_warnings': True,
-            'extract_flat': False,
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             },
@@ -26,6 +27,9 @@ def get_audio():
                 }
             },
         }
+        if os.path.exists(COOKIES_PATH):
+            ydl_opts['cookiefile'] = COOKIES_PATH
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
             url = info['url']
