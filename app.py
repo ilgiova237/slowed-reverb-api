@@ -17,33 +17,48 @@ def get_cookies_path():
         return COOKIES_DST
     return None
 
+def make_opts(cookies):
+    opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+    }
+    if cookies:
+        opts['cookiefile'] = cookies
+    return opts
+
+@app.route('/debug')
+def debug():
+    vid = request.args.get('v', 'dQw4w9WgXcQ').strip()
+    cookies = get_cookies_path()
+    opts = make_opts(cookies)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
+            formats = info.get('formats', [])
+            summary = [{'id': f.get('format_id'), 'ext': f.get('ext'), 'acodec': f.get('acodec'), 'vcodec': f.get('vcodec'), 'abr': f.get('abr'), 'url': bool(f.get('url'))} for f in formats[:20]]
+            return jsonify({'count': len(formats), 'formats': summary})
+    except Exception as e:
+        return jsonify({'error': str(e)[:500]})
+
 @app.route('/audio')
 def get_audio():
     vid = request.args.get('v', '').strip()
     if not vid or len(vid) > 20:
         return jsonify({'error': 'Invalid video ID'}), 400
+    cookies = get_cookies_path()
+    opts = make_opts(cookies)
     try:
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            },
-        }
-        cookies = get_cookies_path()
-        if cookies:
-            ydl_opts['cookiefile'] = cookies
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
             formats = info.get('formats', [])
-            # Get best audio-only format
             audio = [f for f in formats if f.get('vcodec') == 'none' and f.get('url')]
             if audio:
                 best = sorted(audio, key=lambda x: x.get('abr') or 0, reverse=True)[0]
                 return jsonify({'url': best['url']})
-            # Fallback: any format with audio
-            any_audio = [f for f in formats if f.get('acodec') != 'none' and f.get('url')]
+            any_audio = [f for f in formats if f.get('acodec') not in (None, 'none') and f.get('url')]
             if any_audio:
                 return jsonify({'url': any_audio[-1]['url']})
             return jsonify({'error': 'No audio format found'}), 500
