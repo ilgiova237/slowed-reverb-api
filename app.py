@@ -24,7 +24,7 @@ def get_audio():
         return jsonify({'error': 'Invalid video ID'}), 400
     try:
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio',
             'quiet': True,
             'no_warnings': True,
             'http_headers': {
@@ -32,7 +32,7 @@ def get_audio():
             },
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'web'],
+                    'player_client': ['ios', 'android', 'web'],
                 }
             },
         }
@@ -42,9 +42,17 @@ def get_audio():
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
-            url = info['url']
+            # Try to get direct URL
+            url = info.get('url')
             if not url:
-                return jsonify({'error': 'No URL returned'}), 500
+                # Try from formats list
+                formats = info.get('formats', [])
+                audio_formats = [f for f in formats if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
+                if audio_formats:
+                    best = sorted(audio_formats, key=lambda x: x.get('abr', 0) or 0, reverse=True)[0]
+                    url = best.get('url')
+            if not url:
+                return jsonify({'error': 'No URL found'}), 500
             return jsonify({'url': url})
     except Exception as e:
         return jsonify({'error': str(e)[:300]}), 500
