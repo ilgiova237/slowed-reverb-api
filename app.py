@@ -24,16 +24,10 @@ def get_audio():
         return jsonify({'error': 'Invalid video ID'}), 400
     try:
         ydl_opts = {
-            'format': 'bestaudio',
             'quiet': True,
             'no_warnings': True,
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            },
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['ios', 'android', 'web'],
-                }
             },
         }
         cookies = get_cookies_path()
@@ -42,18 +36,17 @@ def get_audio():
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
-            # Try to get direct URL
-            url = info.get('url')
-            if not url:
-                # Try from formats list
-                formats = info.get('formats', [])
-                audio_formats = [f for f in formats if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
-                if audio_formats:
-                    best = sorted(audio_formats, key=lambda x: x.get('abr', 0) or 0, reverse=True)[0]
-                    url = best.get('url')
-            if not url:
-                return jsonify({'error': 'No URL found'}), 500
-            return jsonify({'url': url})
+            formats = info.get('formats', [])
+            # Get best audio-only format
+            audio = [f for f in formats if f.get('vcodec') == 'none' and f.get('url')]
+            if audio:
+                best = sorted(audio, key=lambda x: x.get('abr') or 0, reverse=True)[0]
+                return jsonify({'url': best['url']})
+            # Fallback: any format with audio
+            any_audio = [f for f in formats if f.get('acodec') != 'none' and f.get('url')]
+            if any_audio:
+                return jsonify({'url': any_audio[-1]['url']})
+            return jsonify({'error': 'No audio format found'}), 500
     except Exception as e:
         return jsonify({'error': str(e)[:300]}), 500
 
