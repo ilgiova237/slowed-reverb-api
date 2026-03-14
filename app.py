@@ -17,29 +17,25 @@ def get_cookies_path():
         return COOKIES_DST
     return None
 
-def make_opts(cookies):
-    opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-    }
-    if cookies:
-        opts['cookiefile'] = cookies
-    return opts
-
 @app.route('/debug')
 def debug():
     vid = request.args.get('v', 'dQw4w9WgXcQ').strip()
-    cookies = get_cookies_path()
-    opts = make_opts(cookies)
+    use_cookies = request.args.get('cookies', '1') == '1'
+    opts = {
+        'quiet': False,
+        'no_warnings': False,
+        'listformats': False,
+    }
+    if use_cookies:
+        c = get_cookies_path()
+        if c:
+            opts['cookiefile'] = c
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
             formats = info.get('formats', [])
-            summary = [{'id': f.get('format_id'), 'ext': f.get('ext'), 'acodec': f.get('acodec'), 'vcodec': f.get('vcodec'), 'abr': f.get('abr'), 'url': bool(f.get('url'))} for f in formats[:20]]
-            return jsonify({'count': len(formats), 'formats': summary})
+            summary = [{'id': f.get('format_id'), 'ext': f.get('ext'), 'acodec': f.get('acodec'), 'vcodec': f.get('vcodec'), 'abr': f.get('abr')} for f in formats]
+            return jsonify({'count': len(formats), 'formats': summary[:20]})
     except Exception as e:
         return jsonify({'error': str(e)[:500]})
 
@@ -49,7 +45,9 @@ def get_audio():
     if not vid or len(vid) > 20:
         return jsonify({'error': 'Invalid video ID'}), 400
     cookies = get_cookies_path()
-    opts = make_opts(cookies)
+    opts = {'quiet': True, 'no_warnings': True}
+    if cookies:
+        opts['cookiefile'] = cookies
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
