@@ -22,38 +22,40 @@ def get_audio():
     vid = request.args.get('v', '').strip()
     if not vid or len(vid) > 20:
         return jsonify({'error': 'Invalid video ID'}), 400
-    
+
+    po_token = os.environ.get('PO_TOKEN')
     cookies = get_cookies_path()
-    
-    # Try multiple format combinations
-    attempts = [
-        {'format': '140'},   # m4a 128kbps - most compatible
-        {'format': '251'},   # webm opus 128kbps
-        {'format': '139'},   # m4a 48kbps
-        {'format': '249'},   # webm opus 48kbps
-        {'format': '18'},    # mp4 360p with audio fallback
-    ]
-    
-    last_error = None
-    for attempt in attempts:
-        try:
-            opts = {
-                'quiet': True,
-                'no_warnings': True,
-                'format': attempt['format'],
+
+    opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['web'],
             }
-            if cookies:
-                opts['cookiefile'] = cookies
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
-                url = info.get('url') or (info.get('formats') or [{}])[-1].get('url')
-                if url:
-                    return jsonify({'url': url})
-        except Exception as e:
-            last_error = str(e)[:200]
-            continue
-    
-    return jsonify({'error': last_error or 'No format worked'}), 500
+        },
+    }
+
+    if po_token:
+        opts['extractor_args']['youtube']['po_token'] = [f'web+{po_token}']
+
+    if cookies:
+        opts['cookiefile'] = cookies
+
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
+            formats = info.get('formats', [])
+            audio = [f for f in formats if f.get('vcodec') == 'none' and f.get('url') and f.get('acodec') != 'none']
+            if audio:
+                best = sorted(audio, key=lambda x: x.get('abr') or 0, reverse=True)[0]
+                return jsonify({'url': best['url']})
+            any_audio = [f for f in formats if f.get('acodec') not in (None, 'none') and f.get('url')]
+            if any_audio:
+                return jsonify({'url': any_audio[-1]['url']})
+            return jsonify({'error': 'No audio format found'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)[:300]}), 500
 
 @app.route('/ping')
 def ping():
