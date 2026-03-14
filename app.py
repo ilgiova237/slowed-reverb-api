@@ -2,11 +2,20 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import yt_dlp
 import os
+import shutil
 
 app = Flask(__name__)
 CORS(app, origins="*")
 
-COOKIES_PATH = '/etc/secrets/cookies.txt'
+COOKIES_SRC = '/etc/secrets/cookies.txt'
+COOKIES_DST = '/tmp/cookies.txt'
+
+def get_cookies_path():
+    if os.path.exists(COOKIES_SRC):
+        shutil.copy2(COOKIES_SRC, COOKIES_DST)
+        os.chmod(COOKIES_DST, 0o600)
+        return COOKIES_DST
+    return None
 
 @app.route('/audio')
 def get_audio():
@@ -27,8 +36,9 @@ def get_audio():
                 }
             },
         }
-        if os.path.exists(COOKIES_PATH):
-            ydl_opts['cookiefile'] = COOKIES_PATH
+        cookies = get_cookies_path()
+        if cookies:
+            ydl_opts['cookiefile'] = cookies
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'https://youtube.com/watch?v={vid}', download=False)
